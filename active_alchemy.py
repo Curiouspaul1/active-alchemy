@@ -23,7 +23,7 @@ import sqlalchemy
 from sqlalchemy import *
 from sqlalchemy.orm import scoped_session, sessionmaker, Query
 from sqlalchemy.engine.url import make_url
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.schema import MetaData
 from paginator import Paginator
 import inflection
@@ -34,10 +34,12 @@ DEFAULT_PER_PAGE = 10
 
 utcnow = arrow.utcnow
 
+
 def _create_scoped_session(db, query_cls):
     session = sessionmaker(autoflush=True, autocommit=False,
                            bind=db.engine, query_cls=query_cls)
     return scoped_session(session)
+
 
 def _tablemaker(db):
     def make_sa_table(*args, **kwargs):
@@ -54,9 +56,10 @@ def _tablemaker(db):
 
 def _include_sqlalchemy(db):
     for module in sqlalchemy, sqlalchemy.orm:
-        for key in module.__all__:
-            if not hasattr(db, key):
-                setattr(db, key, getattr(module, key))
+        for key in dir(module):
+            if not key.startswith("_"):
+                if not hasattr(db, key):
+                    setattr(db, key, getattr(module, key))
     db.Table = _tablemaker(db)
     db.event = sqlalchemy.event
     db.utils = sa_utils
@@ -99,7 +102,7 @@ class BaseQuery(Query):
         return Paginator(self, **kwargs)
 
 
-class ModelTableNameDescriptor(object):
+class ModelTableNameDescriptor:
     """
     Create the table name if it doesn't exist.
     """
@@ -111,7 +114,7 @@ class ModelTableNameDescriptor(object):
         return tablename
 
 
-class EngineConnector(object):
+class EngineConnector:
 
     def __init__(self, sa_obj):
         self._sa_obj = sa_obj
@@ -132,7 +135,7 @@ class EngineConnector(object):
             return engine
 
 
-class BaseModel(object):
+class BaseModel:
     """
     Baseclass for custom user models.
     """
@@ -196,7 +199,6 @@ class BaseModel(object):
         self.save()
         return self
 
-
     @classmethod
     def query(cls, *args):
         """
@@ -233,6 +235,7 @@ class BaseModel(object):
         except Exception as e:
             self.db.rollback()
             raise
+
 
 class Model(BaseModel):
     """
@@ -297,7 +300,7 @@ class Model(BaseModel):
         return self
 
 
-class ActiveAlchemy(object):
+class ActiveAlchemy:
     """This class is used to instantiate a SQLAlchemy connection to
     a database.
 
@@ -372,7 +375,7 @@ class ActiveAlchemy(object):
         options = dict([
             (key, val)
             for key, val in kwargs.items()
-            if val is not None
+            if val is not None and key != "convert_unicode"
         ])
         return self._apply_driver_hacks(options)
 

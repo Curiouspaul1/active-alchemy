@@ -3,6 +3,7 @@ import unittest
 
 table_name = "test_model"
 
+
 class TestActiveAlchemy(unittest.TestCase):
 
     @staticmethod
@@ -28,7 +29,6 @@ class TestActiveAlchemy(unittest.TestCase):
         self.db = ActiveAlchemy(uri)
         self.model, self.base_model = self.create_test_model(self.db)
 
-
     def tearDown(self):
         self.db.query(self.model).delete()
         self.db.commit()
@@ -41,7 +41,7 @@ class TestActiveAlchemy(unittest.TestCase):
         self.assertIsNotNone(e)
 
     def test_table_name(self):
-        self.assertEquals(table_name, self.model.__table__.name)
+        self.assertEqual(table_name, self.model.__table__.name)
 
     def test_create(self):
         data = {
@@ -58,7 +58,7 @@ class TestActiveAlchemy(unittest.TestCase):
         self.assertIs(2, len(list(self.model.query())))
 
         e.update(location="Japan")
-        self.assertEquals(e.location, "Japan")
+        self.assertEqual(e.location, "Japan")
 
     def test_update(self):
         n_loc = "ATL"
@@ -83,7 +83,6 @@ class TestActiveAlchemy(unittest.TestCase):
         self.assertIs(1, len(list(self.model.query())))
         e.delete(hard_delete=True)
         self.assertIs(0, len(list(self.model.query(include_deleted=True))))
-
 
     def test_get(self):
         e = self.add_entry()
@@ -133,13 +132,13 @@ class TestActiveAlchemy(unittest.TestCase):
         self.assertIsInstance(e.to_json(), str)
 
     def test_all_distinct(self):
-        for n in xrange(15):
+        for n in range(15):
             self.add_entry()
         es = self.model.query(self.model.name.distinct())
         self.assertIs(1, len(list(es)))
 
     def test_paginate(self):
-        for n in xrange(15):
+        for n in range(15):
             self.add_entry()
 
         es = self.model.query().paginate(page=2, per_page=4)

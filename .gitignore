@@ -8,5 +8,6 @@ dist
 .coverage
 .tox
 htmlcov
-__pycache__
+__pycache__/
 MANIFEST
+env/
