@@ -16,6 +16,7 @@ NAME = "Active-Alchemy"
 
 # ------------------------------------------------------------------------------
 
+import typing as t
 import threading
 import json
 import datetime
@@ -30,15 +31,17 @@ import inflection
 import sqlalchemy_utils as sa_utils
 import arrow
 
+from .query import Query, _QueryProperty
+
 DEFAULT_PER_PAGE = 10
 
 utcnow = arrow.utcnow
 
 
-def _create_scoped_session(db, query_cls):
-    session = sessionmaker(autoflush=True, autocommit=False,
-                           bind=db.engine, query_cls=query_cls)
-    return scoped_session(session)
+# def _create_scoped_session(db, query_cls):
+#     session = sessionmaker(autoflush=True, autocommit=False,
+#                            bind=db.engine, query_cls=query_cls)
+#     return scoped_session(session)
 
 
 def _tablemaker(db):
@@ -57,18 +60,18 @@ def _tablemaker(db):
 def _include_sqlalchemy(db):
     for module in sqlalchemy, sqlalchemy.orm:
         for key in dir(module):
-            if not key.startswith("_"):
+            if not any([key.startswith("_"), key.lower() == 'engine']):
                 if not hasattr(db, key):
                     setattr(db, key, getattr(module, key))
     db.Table = _tablemaker(db)
-    db.event = sqlalchemy.event
-    db.utils = sa_utils
-    db.arrow = arrow
-    db.utcnow = utcnow
-    db.SADateTime = db.DateTime
-    db.DateTime = sa_utils.ArrowType
-    db.JSONType = sa_utils.JSONType
-    db.EmailType = sa_utils.EmailType
+    # db.event = sqlalchemy.event
+    # db.utils = sa_utils
+    # db.arrow = arrow
+    # db.utcnow = utcnow
+    # db.SADateTime = db.DateTime
+    # db.DateTime = sa_utils.ArrowType
+    # db.JSONType = sa_utils.JSONType
+    # # db.EmailType = sa_utils.EmailType
 
 
 class BaseQuery(Query):
@@ -141,7 +144,10 @@ class BaseModel:
     """
 
     __tablename__ = ModelTableNameDescriptor()
-    __primary_key__ = "id"  # String
+    # __primary_key__ = "id"  # String
+
+    query: t.ClassVar[Query] = _QueryProperty()
+    query_class: t.ClassVar[type[Query]] = Query
 
     def __iter__(self):
         """Returns an iterable that supports .next()
@@ -179,7 +185,7 @@ class BaseModel:
         Select entry by its primary key. It must be define as
         __primary_key__ (string)
         """
-        return cls._query(cls).filter(getattr(cls, cls.__primary_key__) == pk).first()
+        return cls._query.get(pk)
 
     @classmethod
     def create(cls, **kwargs):
@@ -199,16 +205,16 @@ class BaseModel:
         self.save()
         return self
 
-    @classmethod
-    def query(cls, *args):
-        """
-        :returns query:
-        """
-        if not args:
-            query = cls._query(cls)
-        else:
-            query = cls._query(*args)
-        return query
+    # @classmethod
+    # def query(cls, *args):
+    #     """
+    #     :returns query:
+    #     """
+    #     if not args:
+    #         query = cls._query(cls)
+    #     else:
+    #         query = cls._query(*args)
+    #     return query
 
     def save(self):
         """
@@ -220,7 +226,7 @@ class BaseModel:
             return self
         except Exception as e:
             self.db.rollback()
-            raise
+            raise e
 
     def delete(self, delete=True, hard_delete=False):
         """
@@ -234,70 +240,60 @@ class BaseModel:
             return self.db.commit()
         except Exception as e:
             self.db.rollback()
-            raise
+            raise e
 
 
-class Model(BaseModel):
-    """
-    Model create
-    """
-    id = Column(Integer, primary_key=True)
-    created_at = Column(sa_utils.ArrowType, default=utcnow)
-    updated_at = Column(sa_utils.ArrowType, default=utcnow, onupdate=utcnow)
-    is_deleted = Column(Boolean, default=False, index=True)
-    deleted_at = Column(sa_utils.ArrowType, default=None)
+# class Model(BaseModel):
+#     """
+#     Model create
+#     """
 
-    @classmethod
-    def query(cls, *args, **kwargs):
-        """
-        :returns query:
+#     id = Column(Integer, primary_key=True)
+#     created_at = Column(sa_utils.ArrowType, default=utcnow)
+#     updated_at = Column(sa_utils.ArrowType, default=utcnow, onupdate=utcnow)
+#     is_deleted = Column(Boolean, default=False, index=True)
+#     deleted_at = Column(sa_utils.ArrowType, default=None)
 
-        :**kwargs:
-            - include_deleted bool: True To filter in deleted records.
-                                    By default it is set to False
-        """
-        if not args:
-            query = cls._query(cls)
-        else:
-            query = cls._query(*args)
+#     # @classmethod
+#     # def query(cls, *args, **kwargs):
+#     #     """
+#     #     :returns query:
 
-        if "include_deleted" not in kwargs or kwargs["include_deleted"] is False:
-            query = query.filter(cls.is_deleted != True)
+#     #     :**kwargs:
+#     #         - include_deleted bool: True To filter in deleted records.
+#     #                                 By default it is set to False
+#     #     """
+#     #     if not args:
+#     #         query = cls._query(cls)
+#     #     else:
+#     #         query = cls._query(*args)
 
-        return query
+#     #     if "include_deleted" not in kwargs or kwargs["include_deleted"] is False:
+#     #         query = query.filter(cls.is_deleted != True)
 
-    @classmethod
-    def get(cls, id, include_deleted=False):
-        """
-        Select entry by id
-        :param id: The id of the entry
-        :param include_deleted: It should not query deleted record. Set to True to get all
-        """
-        return cls.query(include_deleted=include_deleted)\
-                  .filter(cls.id == id)\
-                  .first()
+#     #     return query
 
-    def delete(self, delete=True, hard_delete=False):
-        """
-        Soft delete a record
-        :param delete: Bool - To soft-delete/soft-undelete a record
-        :param hard_delete: Bool - If true it will completely delete the record
-        """
-        # Hard delete
-        if hard_delete:
-            try:
-                self.db.session.delete(self)
-                return self.db.commit()
-            except:
-                self.db.rollback()
-                raise
-        else:
-            data = {
-                "is_deleted": delete,
-                "deleted_at": utcnow() if delete else None
-            }
-            self.update(**data)
-        return self
+#     def delete(self, delete=True, hard_delete=False):
+#         """
+#         Soft delete a record
+#         :param delete: Bool - To soft-delete/soft-undelete a record
+#         :param hard_delete: Bool - If true it will completely delete the record
+#         """
+#         # Hard delete
+#         if hard_delete:
+#             try:
+#                 self.db.session.delete(self)
+#                 return self.db.commit()
+#             except Exception:
+#                 self.db.rollback()
+#                 raise
+#         else:
+#             data = {
+#                 "is_deleted": delete,
+#                 "deleted_at": utcnow() if delete else None
+#             }
+#             self.update(**data)
+#         return self
 
 
 class ActiveAlchemy:
@@ -336,35 +332,39 @@ class ActiveAlchemy:
        `Table` interface, but is a function which allows omission of metadata.
 
     """
-
-    def __init__(self, uri='sqlite://',
+    def __init__(self, uri=None,
                  app=None,
                  echo=False,
                  pool_size=None,
                  pool_timeout=None,
                  pool_recycle=None,
                  convert_unicode=True,
-                 query_cls=BaseQuery):
+                 query_cls=Query):
 
         self.uri = uri
-        self.info = make_url(uri)
+        self.info = make_url(uri) if uri else None
+        self._query_cls = query_cls
         self.options = self._cleanup_options(
             echo=echo,
             pool_size=pool_size,
             pool_timeout=pool_timeout,
             pool_recycle=pool_recycle,
             convert_unicode=convert_unicode,
-        )
+        ) if self.info else {}
 
         self.connector = None
         self._engine_lock = threading.Lock()
-        self.session = _create_scoped_session(self, query_cls=query_cls)
+        self.session = self._create_scoped_session() if self.info else None
 
-        self.Model = declarative_base(cls=Model, name='Model')
+        # self.Model = declarative_base(cls=Model, name='Model')
         self.BaseModel = declarative_base(cls=BaseModel, name='BaseModel')
 
-        self.Model.db, self.BaseModel.db = self, self
-        self.Model._query, self.BaseModel._query = self.session.query, self.session.query
+        self.BaseModel.db = self
+        # self.Model._query = _QueryProperty()
+        self.BaseModel._query = _QueryProperty()
+
+        # self.Model.__fsa__ = self
+        self.BaseModel.__fsa__ = self
 
         if app is not None:
             self.init_app(app)
@@ -378,6 +378,14 @@ class ActiveAlchemy:
             if val is not None and key != "convert_unicode"
         ])
         return self._apply_driver_hacks(options)
+
+    def _create_scoped_session(self, class_=None):
+        query_cls = class_ if self._query_cls is None else self._query_cls
+        session = sessionmaker(
+            autoflush=True, autocommit=False,
+            bind=self.engine, query_cls=query_cls
+        )
+        return scoped_session(session)
 
     def _apply_driver_hacks(self, options):
         if "mysql" in self.info.drivername:
@@ -443,7 +451,7 @@ class ActiveAlchemy:
     @property
     def query(self):
         """Proxy for session.query"""
-        return self.session.query
+        return _QueryProperty()
 
     def add(self, *args, **kwargs):
         """Proxy for session.add"""

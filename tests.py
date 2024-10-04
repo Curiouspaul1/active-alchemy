@@ -30,7 +30,7 @@ class TestActiveAlchemy(unittest.TestCase):
         self.model, self.base_model = self.create_test_model(self.db)
 
     def tearDown(self):
-        self.db.query(self.model).delete()
+        self.db.session.query(self.model).delete()
         self.db.commit()
 
     def add_entry(self):
@@ -48,14 +48,14 @@ class TestActiveAlchemy(unittest.TestCase):
             "name": "Jones",
             "location": "Miami"
         }
-        self.assertIs(0, len(list(self.model.query())))
+        self.assertIs(0, len(list(self.model.query.all())))
 
         v = self.add_entry()
-        self.assertIs(1, len(list(self.model.query())))
+        self.assertIs(1, len(list(self.model.query.all())))
 
         e = v.create(**data)
         self.assertIsNotNone(e)
-        self.assertIs(2, len(list(self.model.query())))
+        self.assertIs(2, len(list(self.model.query.all())))
 
         e.update(location="Japan")
         self.assertEqual(e.location, "Japan")
@@ -80,7 +80,7 @@ class TestActiveAlchemy(unittest.TestCase):
 
     def test_delete_hard(self):
         e = self.add_entry()
-        self.assertIs(1, len(list(self.model.query())))
+        self.assertIs(1, len(list(self.model.query.all())))
         e.delete(hard_delete=True)
         self.assertIs(0, len(list(self.model.query(include_deleted=True))))
 
@@ -103,7 +103,7 @@ class TestActiveAlchemy(unittest.TestCase):
         self.add_entry()
         self.add_entry()
         self.add_entry()
-        self.assertIs(5, len(list(self.model.query())))
+        self.assertIs(5, len(list(self.model.query.all())))
 
     def test_all_but_deleted(self):
         self.add_entry()
@@ -120,8 +120,8 @@ class TestActiveAlchemy(unittest.TestCase):
         self.add_entry().delete().delete(False)
         self.add_entry()
 
-        self.assertIs(4, len(list(self.model.query())))
-        self.assertIs(5, len(list(self.model.query(include_deleted=True))))
+        self.assertIs(4, len(list(self.model.query.all())))
+        self.assertIs(5, len(list(self.model.query.all(include_deleted=True))))
 
     def test_to_dict(self):
         e = self.add_entry()
@@ -134,14 +134,14 @@ class TestActiveAlchemy(unittest.TestCase):
     def test_all_distinct(self):
         for n in range(15):
             self.add_entry()
-        es = self.model.query(self.model.name.distinct())
+        es = self.model.session.query(self.model.name.distinct())
         self.assertIs(1, len(list(es)))
 
     def test_paginate(self):
         for n in range(15):
             self.add_entry()
 
-        es = self.model.query().paginate(page=2, per_page=4)
+        es = self.model.query.paginate(page=2, per_page=4)
         self.assertIs(4, es.total_pages)
 
 
