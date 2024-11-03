@@ -332,14 +332,16 @@ class ActiveAlchemy:
        `Table` interface, but is a function which allows omission of metadata.
 
     """
-    def __init__(self, uri=None,
-                 app=None,
-                 echo=False,
-                 pool_size=None,
-                 pool_timeout=None,
-                 pool_recycle=None,
-                 convert_unicode=True,
-                 query_cls=Query):
+    def __init__(
+        self, uri=None,
+        app=None,
+        echo=False,
+        pool_size=None,
+        pool_timeout=None,
+        pool_recycle=None,
+        convert_unicode=True,
+        query_cls=Query
+    ):
 
         self.uri = uri
         self.info = make_url(uri) if uri else None
@@ -385,6 +387,8 @@ class ActiveAlchemy:
             autoflush=True, autocommit=False,
             bind=self.engine, query_cls=query_cls
         )
+        print("Engine size: ", self.engine.pool.size())
+        print("Engine max  overflow: ", self.engine.pool._max_overflow)
         return scoped_session(session)
 
     def _apply_driver_hacks(self, options):
